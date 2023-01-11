@@ -338,7 +338,7 @@ class TestVmapAPI(TestCase):
             return x
 
         tensor = torch.randn(2, 3)
-        with self.assertRaisesRegex(ValueError, 'can not return a Tensor when out_dim is None'):
+        with self.assertRaisesRegex(ValueError, 'can not return a BatchedTensor when out_dim is None'):
             vmap(foo, out_dims=None)(tensor)
 
         def foo(x):
@@ -346,6 +346,15 @@ class TestVmapAPI(TestCase):
             return 'hello world'
         result = vmap(foo, out_dims=None)(tensor)
         self.assertEqual(result, 'hello world')
+
+    def test_out_dims_normal_tensor(self):
+
+        def foo(x):
+            return torch.zeros(3)
+
+        tensor = torch.randn(2, 3)
+        vmap(foo)(tensor)
+        vmap(foo, out_dims=None)(tensor)
 
 
     def test_pytree_returns(self):
