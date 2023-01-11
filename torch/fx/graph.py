@@ -630,26 +630,39 @@ class _PyTreeCodeGen(CodeGen):
         #
         # the generated code flattens all keywords into positional arguments for `forward()`
         # e.g forward(self, mypos, myargs0, myargs1, mykey, mykwargs0, mykwargs1):
-        # However, within `forward`, `tree_flatten_spec``still needs to parse positionals and keywords separately
-        # e.g. tree_flatten_spec(((mypos, myargs0, myargs1), {'mykey':mykey, 'mykwargs0':mykwargs0, 'mykwargs1':mykwargs1}), self._in_spec)
+        # However, within `forward`, `tree_flatten_spec``still parses args and kwargs separately
+        # e.g. tree_flatten_spec(((mypos, myargs0, myargs1),
+        #                         {'mykey':mykey, 'mykwargs0':mykwargs0, 'mykwargs1':mykwargs1}),
+        #                        self._in_spec)
         if self.pytree_info is None:
             return super().gen_fn_def(free_vars, maybe_return_annotation)
 
-        function_args = self.pytree_info.orig_args
-        has_orig_self = (function_args[0] == 'self') if len(function_args) > 0 else False
+        fn_args = self.pytree_info.orig_args
+        has_orig_self = (fn_args[0] == 'self') if len(fn_args) > 0 else False
         if has_orig_self:
             free_vars.insert(0, 'self')
-        function_definition = super().gen_fn_def(function_args[:], maybe_return_annotation)
+        fn_definition = super().gen_fn_def(fn_args[:], maybe_return_annotation)
 
-        count_args = len(self.pytree_info.in_spec.children_specs[0].children_specs)
-        function_args = self.pytree_info.orig_args[:count_args]
-        function_kwargs = self.pytree_info.orig_args[count_args:]
         if len(free_vars) > 0:  # pytree has placeholders in it
-            function_args = ', '.join(function_args)
-            function_kwargs = '{' + ', '.join(f"'{k}':{v}" for k, v in zip(self.pytree_info.in_spec.children_specs[1].context, function_kwargs)) + '}'
-            function_definition += f"""
-    {', '.join(free_vars)}, = fx_pytree.tree_flatten_spec((({function_args},), {function_kwargs}), self._in_spec)"""
-        return function_definition
+            # when kwargs is present, in_spec is tuple(args, kwargs)
+            has_kwargs = self.pytree_info.in_spec.type == tuple and \
+                len(self.pytree_info.in_spec.children_specs) == 2 and \
+                self.pytree_info.in_spec.children_specs[1].type == dict and \
+                len(self.pytree_info.in_spec.children_specs[1].children_specs) > 0
+            fn_kwargs = '{}'
+
+            if has_kwargs:
+                count_args = len(self.pytree_info.in_spec.children_specs[0].children_specs)
+                fn_args = self.pytree_info.orig_args[:count_args]
+                fn_kwargs = self.pytree_info.orig_args[count_args:]
+                fn_kwargs = '{' + ', '.join(f"'{k}':{v}" for k, v in zip(
+                                  self.pytree_info.in_spec.children_specs[1].context,
+                                  fn_kwargs)) + '}'
+            fn_signature = f"([{', '.join(fn_args)}], {fn_kwargs}), self._in_spec"
+
+            fn_definition += f"""
+    {', '.join(free_vars)}, = fx_pytree.tree_flatten_spec({fn_signature})"""
+        return fn_definition
 
     def generate_output(self, output_args):
         if self.pytree_info:
