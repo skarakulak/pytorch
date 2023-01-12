@@ -1769,7 +1769,7 @@ Tensor sparse_compressed_to_sparse(const Tensor& self, c10::optional<c10::Layout
     AT_ERROR("sparse_compressed_to_sparse for ", self.layout(), " to ", layout_, " conversion does not support specifying number of dense dimensions");
   }
   if (self.layout() == layout_ && (!blocksize.has_value() || at::sparse_csr::getBlockSize(self) == *blocksize)) {
-    return self;
+    return self.clone();
   }
   switch (layout_) {
   case kStrided:
@@ -1814,13 +1814,13 @@ Tensor sparse_coo_to_sparse(const Tensor& self, c10::optional<c10::Layout> layou
     AT_ERROR("sparse_coo_to_sparse for ", self.layout(), " to ", layout_, " conversion does not support specifying number of dense dimensions");
   }
   if (self.layout() == layout_) {
-    return self;
+    return self.clone();
   }
   switch (layout_) {
   case kStrided:
     return self.to_dense();
   case kSparse:
-    return self;
+    return self.clone();
   case kSparseCsr:
     return self.to_sparse_csr(dense_dim_opt);
   case kSparseCsc:
